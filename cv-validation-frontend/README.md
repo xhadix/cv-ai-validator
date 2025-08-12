@@ -1,29 +1,96 @@
-# Create T3 App
+# CV AI Validator
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+A full-stack application for validating CV/resume data against uploaded PDF files using AI.
 
-## What's next? How do I make an app with this?
+## Features
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+- 📝 CV data entry form (name, email, phone, skills, experience)
+- 📄 PDF file upload and storage
+- 🤖 AI-powered validation (comparing form data with PDF content)
+- ✅ Success/error feedback with specific field mismatches
+- 🐳 Docker development environment
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+## Tech Stack
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
+- **Backend**: tRPC, Prisma ORM
+- **Database**: PostgreSQL
+- **File Storage**: MinIO (S3-compatible)
+- **Package Manager**: pnpm
 
-## Learn More
+## Quick Start
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+### 1. Setup Environment
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+```bash
+# Copy environment template
+cp env.example .env
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+# Install dependencies
+pnpm install
+```
 
-## How do I deploy this?
+### 2. Start Development Environment
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+```bash
+# Start PostgreSQL and MinIO
+docker-compose -f docker-compose.dev.yml up -d
+
+# Run database migrations
+pnpm db:push
+
+# Start development server
+pnpm dev
+```
+
+### 3. Access Services
+
+- **Application**: http://localhost:3000
+- **MinIO Console**: http://localhost:9001 (admin/minioadmin)
+- **Database**: localhost:5432
+
+## Development
+
+### Database Commands
+
+```bash
+# Generate Prisma client
+pnpm db:generate
+
+# Push schema changes
+pnpm db:push
+
+# Open Prisma Studio
+pnpm db:studio
+```
+
+### Code Quality
+
+```bash
+# Type checking
+pnpm typecheck
+
+# Linting
+pnpm lint
+
+# Formatting
+pnpm format:write
+```
+
+## Project Structure
+
+```
+src/
+├── app/              # Next.js app router
+├── server/           # tRPC API routes
+├── trpc/             # tRPC client setup
+└── styles/           # Global styles
+```
+
+## Environment Variables
+
+See `env.example` for all required environment variables.
+
+## License
+
+MIT

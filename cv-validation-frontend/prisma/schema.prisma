@@ -10,6 +10,32 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
+model CV {
+    id          String   @id @default(cuid())
+    fullName    String
+    email       String
+    phone       String
+    skills      String
+    experience  String
+    pdfUrl      String?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@index([email])
+}
+
+model ValidationResult {
+    id          String   @id @default(cuid())
+    cvId        String
+    cv          CV       @relation(fields: [cvId], references: [id], onDelete: Cascade)
+    isValid     Boolean
+    mismatches  String[] // Array of field names that don't match
+    message     String
+    createdAt   DateTime @default(now())
+
+    @@index([cvId])
+}
+
 model Post {
     id        Int      @id @default(autoincrement())
     name      String
