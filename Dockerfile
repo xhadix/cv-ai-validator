@@ -24,14 +24,14 @@ COPY . .
 # Generate Prisma client
 RUN pnpm prisma generate
 
-# Build the application
-RUN pnpm run build
+# Build the application (skip linting for production)
+RUN SKIP_ENV_VALIDATION=1 pnpm run build:prod
 
 # Production image, copy all the files and run next
 FROM base AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
+ENV NODE_ENV=production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 # ENV NEXT_TELEMETRY_DISABLED 1
 
@@ -53,16 +53,17 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Copy Prisma client and schema
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+RUN mkdir -p /app/node_modules/.prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.pnpm/*/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
 USER nextjs
 
 EXPOSE 3000
 
-ENV PORT 3000
+ENV PORT=3000
 # set hostname to localhost
-ENV HOSTNAME "0.0.0.0"
+ENV HOSTNAME="0.0.0.0"
 
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/next-config-js/output
