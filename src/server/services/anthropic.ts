@@ -28,103 +28,122 @@ export interface ValidationResult {
 }
 
 export async function validateCVWithClaude(
-  cvData: CVData,
+  cvData: {
+    fullName: string;
+    email: string;
+    phone: string;
+    skills: string;
+    experience: string;
+  },
   pdfText: string
 ): Promise<ValidationResult> {
-  if (!env.ANTHROPIC_API_KEY) {
-    throw new Error('Anthropic API key not configured');
-  }
-
   const prompt = `
-You are an expert CV validator. Your task is to compare the information provided in a form with the content of a PDF CV document.
+You are an expert CV validator. Your task is to compare the information provided in a CV form with the actual content of the uploaded PDF document.
 
-FORM DATA:
+CV Form Data:
 - Full Name: ${cvData.fullName}
 - Email: ${cvData.email}
 - Phone: ${cvData.phone}
 - Skills: ${cvData.skills}
 - Experience: ${cvData.experience}
 
-PDF CONTENT:
+PDF Content:
 ${pdfText}
 
-INSTRUCTIONS:
-1. Compare each field from the form with the PDF content
-2. Check for exact matches, partial matches, or missing information
-3. Be flexible with formatting differences (spaces, punctuation, etc.)
-4. For skills, check if the skills mentioned in the form appear in the PDF
-5. For experience, check if the experience description matches or is consistent with the PDF
+Analyze the PDF content and compare it with the form data. Check for:
+1. Name consistency (including variations, abbreviations, or different formats)
+2. Email address presence and accuracy
+3. Phone number presence and accuracy
+4. Skills mentioned in the PDF vs form
+5. Experience details consistency
 
-Please respond with a JSON object in this exact format:
+Return your analysis as a JSON object with the following structure:
 {
   "isValid": boolean,
   "mismatches": ["field1", "field2"],
-  "message": "Human readable summary",
-  "confidence": 0.95,
+  "message": "Detailed explanation of validation results",
+  "confidence": 0.0-1.0,
   "details": [
     {
-      "field": "fullName",
-      "formValue": "John Doe",
-      "pdfValue": "John Doe",
-      "match": true,
-      "reason": "Exact match"
+      "field": "field_name",
+      "status": "match|mismatch|partial",
+      "explanation": "Detailed explanation"
     }
   ]
 }
 
-Fields to check: fullName, email, phone, skills, experience
+Be thorough in your analysis and provide detailed explanations for any mismatches found.
 `;
 
-  try {
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 2000,
-      temperature: 0.1,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-    });
+  // Retry logic for CV validation
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      const response = await anthropic.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 4000, // Increased token limit for more detailed analysis
+        temperature: 0.1,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      });
 
-    const content = response.content[0];
-    if (!content || content.type !== 'text') {
-      throw new Error('Unexpected response type from Claude');
+      const content = response.content[0];
+      if (!content || content.type !== 'text') {
+        throw new Error('Unexpected response type from Claude');
+      }
+
+      // Parse the JSON response
+      const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in Claude response');
+      }
+
+      const result = JSON.parse(jsonMatch[0]) as ValidationResult;
+      
+      // Validate the response structure
+      if (typeof result.isValid !== 'boolean') {
+        throw new Error('Invalid response: isValid must be boolean');
+      }
+
+      return {
+        isValid: result.isValid,
+        mismatches: result.mismatches || [],
+        message: result.message || 'Validation completed',
+        confidence: result.confidence || 0.8,
+        details: result.details || [],
+      };
+    } catch (error) {
+      console.error(`Claude API error (attempt ${4 - retries}):`, error);
+      retries--;
+      
+      if (retries > 0) {
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } else {
+        // All retries failed, return fallback
+        return {
+          isValid: false,
+          mismatches: ['api_error'],
+          message: 'AI validation failed. Please try again or contact support.',
+          confidence: 0.0,
+          details: [],
+        };
+      }
     }
-
-    // Parse the JSON response
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in Claude response');
-    }
-
-    const result = JSON.parse(jsonMatch[0]) as ValidationResult;
-    
-    // Validate the response structure
-    if (typeof result.isValid !== 'boolean') {
-      throw new Error('Invalid response: isValid must be boolean');
-    }
-
-    return {
-      isValid: result.isValid,
-      mismatches: result.mismatches || [],
-      message: result.message || 'Validation completed',
-      confidence: result.confidence || 0.8,
-      details: result.details || [],
-    };
-  } catch (error) {
-    console.error('Claude API error:', error);
-    
-    // Fallback to basic validation if API fails
-    return {
-      isValid: false,
-      mismatches: ['api_error'],
-      message: 'AI validation failed. Please try again or contact support.',
-      confidence: 0.0,
-      details: [],
-    };
   }
+  
+  // This should never be reached, but just in case
+  return {
+    isValid: false,
+    mismatches: ['api_error'],
+    message: 'AI validation failed. Please try again or contact support.',
+    confidence: 0.0,
+    details: [],
+  };
 }
 
 export async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
@@ -139,45 +158,33 @@ export async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
       const data = await pdf(pdfBuffer);
       pdfText = data.text || '';
     } catch (pdfError) {
-      console.log('pdf-parse failed, trying alternative extraction:', pdfError);
+      console.log('pdf-parse failed, trying Claude extraction:', pdfError);
     }
     
-    // If pdf-parse failed or returned empty text, try a simpler approach
+    // If pdf-parse failed or returned empty text, use Claude with full PDF
     if (!pdfText || pdfText.trim().length < 10) {
-      console.log('Using alternative PDF text extraction');
+      console.log('Using Claude for PDF text extraction');
       
-      // Try to extract text from the PDF buffer directly
-      const bufferString = pdfBuffer.toString('utf-8', 0, Math.min(pdfBuffer.length, 50000));
+      // Convert the entire PDF buffer to base64 for Claude
+      const pdfBase64 = pdfBuffer.toString('base64');
       
-      // Look for text patterns in the PDF content
-      const textMatches = bufferString.match(/\([^)]{3,}\)/g);
-      if (textMatches && textMatches.length > 0) {
-        pdfText = textMatches
-          .map(match => match.slice(1, -1)) // Remove parentheses
-          .filter(text => text.length > 2 && /[a-zA-Z]/.test(text)) // Filter meaningful text
-          .join(' ');
-      }
-      
-      // If still no text, try Claude with a smaller chunk
-      if (!pdfText || pdfText.trim().length < 10) {
-        try {
-          // Use a smaller chunk to avoid rate limits
-          const chunkSize = Math.min(pdfBuffer.length, 10000);
-          const pdfChunk = pdfBuffer.toString('base64', 0, chunkSize);
-          
-          const prompt = `
-You are a PDF text extraction expert. I will provide you with a portion of a PDF file encoded in base64.
+      const prompt = `
+You are a PDF text extraction expert. I will provide you with a PDF file encoded in base64.
 Please extract and clean the text content, removing any formatting artifacts, and return only the readable text.
 
-PDF Content (base64 encoded, first ${chunkSize} bytes):
-${pdfChunk}
+PDF Content (base64 encoded):
+${pdfBase64}
 
 Please return only the extracted text content, nothing else. If no readable text is found, return "NO_TEXT_FOUND".
 `;
 
+      // Retry logic for Claude extraction
+      let retries = 3;
+      while (retries > 0) {
+        try {
           const response = await anthropic.messages.create({
             model: 'claude-3-5-sonnet-20241022',
-            max_tokens: 1000, // for cost issues
+            max_tokens: 4000, // Increased token limit for better extraction
             temperature: 0.1,
             messages: [
               {
@@ -190,9 +197,15 @@ Please return only the extracted text content, nothing else. If no readable text
           const content = response.content[0];
           if (content && content.type === 'text') {
             pdfText = content.text.trim();
+            break; // Success, exit retry loop
           }
         } catch (claudeError) {
-          console.log('Claude extraction failed due to rate limits:', claudeError);
+          console.log(`Claude extraction attempt ${4 - retries} failed:`, claudeError);
+          retries--;
+          if (retries > 0) {
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
         }
       }
     }
