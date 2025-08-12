@@ -66,20 +66,22 @@ export function FileUpload({ cvId, onSuccess, onBack }: FileUploadProps) {
           setUploadProgress(100);
           
           // Extract PDF text after successful upload
+          let extractedText = "";
           try {
             const textResult = await extractPdfText.mutateAsync({
               fileName: uploadUrlResult.fileName,
             });
             
             if (textResult && typeof textResult === 'object' && 'success' in textResult && textResult.success && 'text' in textResult) {
-              setPdfText((textResult as { text: string }).text);
+              extractedText = (textResult as { text: string }).text;
+              setPdfText(extractedText);
             }
           } catch (error) {
             console.error("Failed to extract PDF text:", error);
             // Continue anyway - validation can still work without text extraction
           }
           
-          onSuccess(uploadUrlResult.fileName, pdfText);
+          onSuccess(uploadUrlResult.fileName, extractedText);
         } else {
           throw new Error(`Upload failed with status: ${xhr.status}`);
         }
