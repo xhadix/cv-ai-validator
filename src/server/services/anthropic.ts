@@ -129,48 +129,85 @@ Fields to check: fullName, email, phone, skills, experience
 
 export async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
   try {
-    // Only import pdf-parse when we actually need it
-    // This prevents the library from trying to access test files during module loading
-    const pdfModule = await import('pdf-parse');
-    const pdf = pdfModule.default || pdfModule;
-    const data = await pdf(pdfBuffer);
-    return data.text;
-  } catch (error) {
-    console.error('PDF parsing error:', error);
+    // Try to use pdf-parse with proper error handling
+    let pdfText = '';
     
-    // Fallback to Claude for text extraction if pdf-parse fails
-    const prompt = `
-You are a PDF text extraction expert. I will provide you with PDF content (possibly in a raw format).
-Please extract and clean the text content, removing any formatting artifacts, and return only the readable text.
-
-PDF Content:
-${pdfBuffer.toString('utf-8', 0, 1000)} // First 1000 bytes as example
-
-Please return only the extracted text content, nothing else.
-`;
-
     try {
-      const response = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1000,
-        temperature: 0.1,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      });
-
-      const content = response.content[0];
-      if (content && content.type === 'text') {
-        return content.text.trim();
+      // Dynamic import to avoid test file issues
+      const pdfModule = await import('pdf-parse');
+      const pdf = pdfModule.default || pdfModule;
+      const data = await pdf(pdfBuffer);
+      pdfText = data.text || '';
+    } catch (pdfError) {
+      console.log('pdf-parse failed, trying alternative extraction:', pdfError);
+    }
+    
+    // If pdf-parse failed or returned empty text, try a simpler approach
+    if (!pdfText || pdfText.trim().length < 10) {
+      console.log('Using alternative PDF text extraction');
+      
+      // Try to extract text from the PDF buffer directly
+      const bufferString = pdfBuffer.toString('utf-8', 0, Math.min(pdfBuffer.length, 50000));
+      
+      // Look for text patterns in the PDF content
+      const textMatches = bufferString.match(/\([^)]{3,}\)/g);
+      if (textMatches && textMatches.length > 0) {
+        pdfText = textMatches
+          .map(match => match.slice(1, -1)) // Remove parentheses
+          .filter(text => text.length > 2 && /[a-zA-Z]/.test(text)) // Filter meaningful text
+          .join(' ');
       }
       
-      return '';
-    } catch (claudeError) {
-      console.error('Claude PDF extraction error:', claudeError);
+      // If still no text, try Claude with a smaller chunk
+      if (!pdfText || pdfText.trim().length < 10) {
+        try {
+          // Use a smaller chunk to avoid rate limits
+          const chunkSize = Math.min(pdfBuffer.length, 10000);
+          const pdfChunk = pdfBuffer.toString('base64', 0, chunkSize);
+          
+          const prompt = `
+You are a PDF text extraction expert. I will provide you with a portion of a PDF file encoded in base64.
+Please extract and clean the text content, removing any formatting artifacts, and return only the readable text.
+
+PDF Content (base64 encoded, first ${chunkSize} bytes):
+${pdfChunk}
+
+Please return only the extracted text content, nothing else. If no readable text is found, return "NO_TEXT_FOUND".
+`;
+
+          const response = await anthropic.messages.create({
+            model: 'claude-3-5-sonnet-20241022',
+            max_tokens: 1000, // for cost issues
+            temperature: 0.1,
+            messages: [
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+          });
+
+          const content = response.content[0];
+          if (content && content.type === 'text') {
+            pdfText = content.text.trim();
+          }
+        } catch (claudeError) {
+          console.log('Claude extraction failed due to rate limits:', claudeError);
+        }
+      }
+    }
+    
+    // Final validation
+    if (!pdfText || pdfText.trim().length < 10 || pdfText === 'NO_TEXT_FOUND') {
+      console.log('No readable text found in PDF');
       return '';
     }
+    
+    console.log(`Extracted ${pdfText.length} characters from PDF`);
+    return pdfText;
+    
+  } catch (error) {
+    console.error('PDF text extraction failed:', error);
+    return '';
   }
 }

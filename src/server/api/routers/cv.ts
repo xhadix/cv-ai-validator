@@ -102,8 +102,23 @@ export const cvRouter = createTRPCRouter({
           throw new Error("CV not found");
         }
 
-        if (!input.pdfText || !input.pdfText.trim()) {
-          throw new Error("PDF text is required for validation");
+        // Check if PDF text is provided and valid
+        if (!input.pdfText || input.pdfText.trim().length < 10) {
+          // Create a validation result indicating PDF text extraction failed
+          const validationResult = await ctx.db.validationResult.create({
+            data: {
+              cvId: input.cvId,
+              isValid: false,
+              mismatches: ['pdf_text_extraction_failed'],
+              message: 'Unable to perform proper validation as the PDF content is not provided. The PDF appears to only contain metadata without actual content to compare against.',
+            },
+          });
+
+          return {
+            success: false,
+            validationResult,
+            message: validationResult.message,
+          };
         }
 
         // Use Anthropic Claude for AI validation

@@ -222,7 +222,39 @@ docker compose logs minio
 # Check application health
 curl http://localhost:3000/api/health
 
+# Debug file upload issues
+./debug-upload.sh
+
+# Test file upload functionality
+./test-upload.sh
 ```
+
+### File Upload Troubleshooting
+
+If you encounter file upload issues in production:
+
+1. **Run the debug script:**
+   ```bash
+   ./debug-upload.sh
+   ```
+
+2. **Test upload functionality:**
+   ```bash
+   ./test-upload.sh
+   ```
+
+3. **Common issues:**
+   - MinIO connection problems (check networking)
+   - Bucket creation failures (check MinIO logs)
+   - File size limits (configured for 10MB max)
+   - SSL/TLS issues (set `MINIO_USE_SSL=false` for development)
+
+4. **Check container status:**
+   ```bash
+   docker ps
+   docker logs cv-validator-minio-prod
+   docker logs cv-validator-app
+   ```
 
 ## 📁 Project Structure
 

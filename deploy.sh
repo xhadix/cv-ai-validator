@@ -25,21 +25,21 @@ echo "⏳ Waiting for services to be healthy..."
 
 # Wait for database to be ready
 echo "Waiting for PostgreSQL..."
-until docker compose exec -T postgres pg_isready -U $POSTGRES_USER; do
+until docker compose exec -T postgres pg_isready -U ${POSTGRES_USER:-postgres}; do
     echo "PostgreSQL is not ready yet..."
     sleep 2
 done
 
 # Wait for MinIO to be ready
 echo "Waiting for MinIO..."
-until curl -f http://localhost:9000/minio/health/live; do
+until docker compose exec -T minio timeout 5 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/9000'; do
     echo "MinIO is not ready yet..."
     sleep 2
 done
 
 # Wait for app to be ready
 echo "Waiting for application..."
-until curl -f http://localhost:3000/api/health; do
+until docker compose exec -T app ps aux | grep -q "next-server"; do
     echo "Application is not ready yet..."
     sleep 2
 done
@@ -48,12 +48,12 @@ echo "✅ All services are healthy!"
 
 # Run database migrations
 echo "🗄️ Running database migrations..."
-docker compose exec app pnpm prisma migrate deploy
+echo "y" | docker compose exec -T app npx prisma migrate deploy
 
 # Seed database if needed
 if [ "$SEED_DATABASE" = "true" ]; then
     echo "🌱 Seeding database..."
-    docker compose exec app pnpm run db:seed
+    docker compose exec app npm run db:seed
 fi
 
 echo "🎉 Deployment completed successfully!"

@@ -10,10 +10,21 @@ let minioClient: Client | null = null;
 
 function getMinioClient(): Client {
   if (!minioClient) {
+    // Force SSL to false for local development
+    const useSSL = false;
+    
+    console.log("Initializing MinIO client with config:", {
+      endPoint: env.MINIO_ENDPOINT,
+      port: env.MINIO_PORT,
+      useSSL: useSSL,
+      accessKey: env.MINIO_ACCESS_KEY,
+      // Don't log secret key for security
+    });
+
     minioClient = new Client({
       endPoint: env.MINIO_ENDPOINT,
       port: env.MINIO_PORT,
-      useSSL: false, // Force HTTP for local development
+      useSSL: useSSL,
       accessKey: env.MINIO_ACCESS_KEY,
       secretKey: env.MINIO_SECRET_KEY,
     });
@@ -21,18 +32,47 @@ function getMinioClient(): Client {
   return minioClient;
 }
 
-// Ensure bucket exists
+// Ensure bucket exists with retry logic
 async function ensureBucketExists() {
-  try {
-    const client = getMinioClient();
-    const exists = await client.bucketExists(env.MINIO_BUCKET_NAME);
-    if (!exists) {
-      await client.makeBucket(env.MINIO_BUCKET_NAME);
-      console.log(`Bucket '${env.MINIO_BUCKET_NAME}' created successfully`);
+  const maxRetries = 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const client = getMinioClient();
+      const exists = await client.bucketExists(env.MINIO_BUCKET_NAME);
+      
+      if (!exists) {
+        console.log(`Creating bucket '${env.MINIO_BUCKET_NAME}' (attempt ${attempt})`);
+        await client.makeBucket(env.MINIO_BUCKET_NAME);
+        console.log(`Bucket '${env.MINIO_BUCKET_NAME}' created successfully`);
+      } else {
+        console.log(`Bucket '${env.MINIO_BUCKET_NAME}' already exists`);
+      }
+      return; // Success, exit retry loop
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`Bucket creation attempt ${attempt} failed:`, lastError.message);
+      
+      if (attempt < maxRetries) {
+        // Wait before retry (exponential backoff)
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
-  } catch (error) {
-    console.error("Error ensuring bucket exists:", error);
-    throw new Error("Failed to initialize file storage");
+  }
+  
+  // All retries failed
+  throw new Error(`Failed to initialize file storage after ${maxRetries} attempts: ${lastError?.message}`);
+}
+
+// Initialize bucket on startup
+let bucketInitialized = false;
+async function initializeBucket() {
+  if (!bucketInitialized) {
+    await ensureBucketExists();
+    bucketInitialized = true;
   }
 }
 
@@ -48,6 +88,9 @@ export const fileUploadRouter = createTRPCRouter({
     }))
     .mutation(async ({ input }) => {
       try {
+        // Ensure bucket exists before generating URL
+        await initializeBucket();
+        
         // Generate unique filename
         const timestamp = Date.now();
         const uniqueFileName = `${timestamp}-${input.fileName}`;
@@ -59,6 +102,8 @@ export const fileUploadRouter = createTRPCRouter({
           24 * 60 * 60 // 24 hours expiry
         );
 
+        console.log(`Generated upload URL for file: ${uniqueFileName}`);
+
         return {
           success: true,
           uploadUrl,
@@ -67,7 +112,7 @@ export const fileUploadRouter = createTRPCRouter({
         };
       } catch (error) {
         console.error("Error generating upload URL:", error);
-        throw new Error("Failed to generate upload URL");
+        throw new Error(`Failed to generate upload URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }),
 
