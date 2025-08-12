@@ -99,8 +99,6 @@ temp/
 ehthumbs.db
 Thumbs.db
 
-# Docker
-.dockerignore
 
 # MinIO data (development)
 minio-data/

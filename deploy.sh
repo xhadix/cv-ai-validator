@@ -19,7 +19,7 @@ source .env.production
 echo "📦 Building and starting services..."
 
 # Build and start all services
-docker compose up -d --build
+docker compose --env-file .env.production up -d --build
 
 echo "⏳ Waiting for services to be healthy..."
 

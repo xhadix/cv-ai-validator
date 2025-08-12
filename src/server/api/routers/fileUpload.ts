@@ -44,20 +44,23 @@ function getMinioPresignedClient(): Client {
     // Ensure port is a number
     const port = typeof env.MINIO_PORT === 'string' ? parseInt(env.MINIO_PORT, 10) : env.MINIO_PORT;
     
-    // Use different endpoints for development vs production
-    // In development: use 127.0.0.1 (browser access)
-    // In production: use the same endpoint as internal client (minio)
-    const endPoint = process.env.NODE_ENV === 'production' ? env.MINIO_ENDPOINT : '127.0.0.1';
+    let endPoint: string;
+    if (process.env.NODE_ENV === 'production') {
+      endPoint = 'localhost'; // Use localhost for presigned URLs in production
+    } else {
+      endPoint = '127.0.0.1'; // Use IPv4 localhost in development
+    }
     
     console.log("Initializing MinIO client (presigned) with config:", {
-      endPoint: endPoint, // Use environment-appropriate endpoint
+      endPoint: endPoint,
       port: port,
       useSSL: useSSL,
       accessKey: env.MINIO_ACCESS_KEY,
+      environment: process.env.NODE_ENV,
     });
 
     minioPresignedClient = new Client({
-      endPoint: endPoint, // Use environment-appropriate endpoint
+      endPoint: endPoint,
       port: port,
       useSSL: useSSL,
       accessKey: env.MINIO_ACCESS_KEY,
