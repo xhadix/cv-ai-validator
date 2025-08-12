@@ -17,16 +17,19 @@ function getMinioClient(): Client {
     // Ensure port is a number
     const port = typeof env.MINIO_PORT === 'string' ? parseInt(env.MINIO_PORT, 10) : env.MINIO_PORT;
     
+    // Use environment-appropriate endpoint
+    const endPoint = process.env.NODE_ENV === 'production' ? 'minio' : 'localhost';
+    
     console.log("Initializing MinIO client (internal) with config:", {
-      endPoint: env.MINIO_ENDPOINT,
+      endPoint: endPoint,
       port: port,
       useSSL: useSSL,
       accessKey: env.MINIO_ACCESS_KEY,
-      // Don't log secret key for security
+      environment: process.env.NODE_ENV,
     });
 
     minioClient = new Client({
-      endPoint: env.MINIO_ENDPOINT, // Use internal Docker hostname for internal operations
+      endPoint: endPoint,
       port: port,
       useSSL: useSSL,
       accessKey: env.MINIO_ACCESS_KEY,
@@ -41,23 +44,9 @@ function getMinioPresignedClient(): Client {
     // Force SSL to false for local development
     const useSSL = false;
     
-    // Ensure port is a number
     const port = typeof env.MINIO_PORT === 'string' ? parseInt(env.MINIO_PORT, 10) : env.MINIO_PORT;
     
-    let endPoint: string;
-    if (process.env.NODE_ENV === 'production') {
-      endPoint = 'localhost'; // Use localhost for presigned URLs in production
-    } else {
-      endPoint = '127.0.0.1'; // Use IPv4 localhost in development
-    }
-    
-    console.log("Initializing MinIO client (presigned) with config:", {
-      endPoint: endPoint,
-      port: port,
-      useSSL: useSSL,
-      accessKey: env.MINIO_ACCESS_KEY,
-      environment: process.env.NODE_ENV,
-    });
+    const endPoint = process.env.NODE_ENV === 'production' ? 'minio' : 'localhost';
 
     minioPresignedClient = new Client({
       endPoint: endPoint,
@@ -134,11 +123,16 @@ export const fileUploadRouter = createTRPCRouter({
         const uniqueFileName = `${timestamp}-${input.fileName}`;
         
         // Generate presigned URL for upload
-        const uploadUrl = await getMinioPresignedClient().presignedPutObject(
+        let uploadUrl = await getMinioPresignedClient().presignedPutObject(
           env.MINIO_BUCKET_NAME,
           uniqueFileName,
           24 * 60 * 60 // 24 hours expiry
         );
+
+        // In production, replace minio:9000 with localhost:9000 for browser access
+        if (process.env.NODE_ENV === 'production') {
+          uploadUrl = uploadUrl.replace('minio:9000', 'localhost:9000');
+        }
 
         console.log(`Generated upload URL for file: ${uniqueFileName}`);
 
@@ -161,11 +155,16 @@ export const fileUploadRouter = createTRPCRouter({
     }))
     .mutation(async ({ input }) => {
       try {
-        const downloadUrl = await getMinioPresignedClient().presignedGetObject(
+        let downloadUrl = await getMinioPresignedClient().presignedGetObject(
           env.MINIO_BUCKET_NAME,
           input.fileName,
           24 * 60 * 60 // 24 hours expiry
         );
+
+        // In production, replace minio:9000 with localhost:9000 for browser access
+        if (process.env.NODE_ENV === 'production') {
+          downloadUrl = downloadUrl.replace('minio:9000', 'localhost:9000');
+        }
 
         return {
           success: true,
