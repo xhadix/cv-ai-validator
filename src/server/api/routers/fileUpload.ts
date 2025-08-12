@@ -13,9 +13,12 @@ function getMinioClient(): Client {
     // Force SSL to false for local development
     const useSSL = false;
     
+    // Ensure port is a number
+    const port = typeof env.MINIO_PORT === 'string' ? parseInt(env.MINIO_PORT, 10) : env.MINIO_PORT;
+    
     console.log("Initializing MinIO client with config:", {
       endPoint: env.MINIO_ENDPOINT,
-      port: env.MINIO_PORT,
+      port: port,
       useSSL: useSSL,
       accessKey: env.MINIO_ACCESS_KEY,
       // Don't log secret key for security
@@ -23,7 +26,7 @@ function getMinioClient(): Client {
 
     minioClient = new Client({
       endPoint: env.MINIO_ENDPOINT,
-      port: env.MINIO_PORT,
+      port: port,
       useSSL: useSSL,
       accessKey: env.MINIO_ACCESS_KEY,
       secretKey: env.MINIO_SECRET_KEY,
