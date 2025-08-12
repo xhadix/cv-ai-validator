@@ -29,8 +29,6 @@ const handler = (req: NextRequest) =>
             );
           }
         : undefined,
-    // Configure for larger file uploads
-    maxBodySize: 10 * 1024 * 1024, // 10MB
   });
 
 export { handler as GET, handler as POST };
