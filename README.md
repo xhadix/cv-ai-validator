@@ -128,8 +128,8 @@ The application uses **real AI validation** with Anthropic's Claude API:
 
 1. **Configure production environment**
    ```bash
-   cp env.production.example .env
-   # Edit .env with production values
+   cp env.production.example .env.production
+   # Edit .env.production with production values
    # Add your ANTHROPIC_API_KEY
    ```
 
@@ -178,7 +178,7 @@ The application uses **real AI validation** with Anthropic's Claude API:
 |----------|-------------|---------|----------|
 | `DATABASE_URL` | PostgreSQL connection string | - | ✅ |
 | `ANTHROPIC_API_KEY` | **Anthropic Claude API key** | - | ✅ |
-| `MINIO_ENDPOINT` | MinIO server endpoint | `localhost` | - |
+| `MINIO_ENDPOINT` | MinIO server endpoint | `localhost` (dev), `minio` (prod) | - |
 | `MINIO_PORT` | MinIO server port | `9000` | - |
 | `MINIO_ACCESS_KEY` | MinIO access key | `minioadmin` | - |
 | `MINIO_SECRET_KEY` | MinIO secret key | `minioadmin` | - |
@@ -193,11 +193,14 @@ The application uses **real AI validation** with Anthropic's Claude API:
 
 ### Docker Deployment
 
-The application includes a complete Docker setup for production with **fixed Prisma integration**:
+The application includes a complete Docker setup for production with **fixed Prisma integration** and **environment-aware MinIO configuration**:
 
 ```bash
-# Build and start all services
-docker compose up -d --build
+# Build and start all services (uses .env.production automatically)
+./deploy.sh
+
+# Or manually with production environment
+docker compose --env-file .env.production up -d --build
 
 # View logs
 docker compose logs -f
@@ -231,7 +234,7 @@ curl http://localhost:3000/api/health
 
 ### File Upload Troubleshooting
 
-If you encounter file upload issues in production:
+If you encounter file upload issues:
 
 1. **Run the debug script:**
    ```bash
@@ -248,6 +251,7 @@ If you encounter file upload issues in production:
    - Bucket creation failures (check MinIO logs)
    - File size limits (configured for 10MB max)
    - SSL/TLS issues (set `MINIO_USE_SSL=false` for development)
+   - Environment configuration (ensure correct `.env` files are used)
 
 4. **Check container status:**
    ```bash
