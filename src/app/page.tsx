@@ -2,8 +2,10 @@ import { CVValidator } from "~/app/_components/cv-validator";
 import { api, HydrateClient } from "~/trpc/server";
 
 export default async function Home() {
-  // Prefetch CV data
-  void api.cv.getAll.prefetch();
+  // Only prefetch CV data in development or when not building
+  if (process.env.NODE_ENV === 'development') {
+    void api.cv.getAll.prefetch();
+  }
 
   return (
     <HydrateClient>
