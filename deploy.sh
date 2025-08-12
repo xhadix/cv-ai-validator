@@ -6,15 +6,15 @@ set -e
 
 echo "🚀 Starting CV AI Validator deployment..."
 
-# Check if .env file exists
-if [ ! -f .env ]; then
-    echo "❌ Error: .env file not found!"
-    echo "Please copy env.production.example to .env and configure your environment variables."
+# Check if .env.production file exists
+if [ ! -f .env.production ]; then
+    echo "❌ Error: .env.production file not found!"
+    echo "Please copy env.production.example to .env.production and configure your environment variables."
     exit 1
 fi
 
-# Load environment variables
-source .env
+# Load environment variables from production file
+source .env.production
 
 echo "📦 Building and starting services..."
 

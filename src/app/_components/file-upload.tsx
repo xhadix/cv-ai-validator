@@ -72,9 +72,18 @@ export function FileUpload({ cvId, onSuccess, onBack }: FileUploadProps) {
               fileName: uploadUrlResult.fileName,
             });
             
-            if (textResult && typeof textResult === 'object' && 'success' in textResult && textResult.success && 'text' in textResult) {
-              extractedText = (textResult as { text: string }).text;
-              setPdfText(extractedText);
+            if (textResult && typeof textResult === 'object' && 'success' in textResult) {
+              if (textResult.success && 'text' in textResult) {
+                extractedText = (textResult as { text: string }).text;
+                setPdfText(extractedText);
+                
+                if (!extractedText || extractedText.trim().length === 0) {
+                  console.warn("PDF text extraction returned empty result - validation will handle this");
+                }
+              } else {
+                const errorResult = textResult as { success: false; message?: string };
+                console.warn("PDF text extraction failed:", errorResult.message || "Unknown error");
+              }
             }
           } catch (error) {
             console.error("Failed to extract PDF text:", error);

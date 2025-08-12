@@ -7,6 +7,7 @@ import { extractTextFromPDF } from "~/server/services/anthropic";
 
 // Lazy MinIO client initialization
 let minioClient: Client | null = null;
+let minioPresignedClient: Client | null = null;
 
 function getMinioClient(): Client {
   if (!minioClient) {
@@ -16,7 +17,7 @@ function getMinioClient(): Client {
     // Ensure port is a number
     const port = typeof env.MINIO_PORT === 'string' ? parseInt(env.MINIO_PORT, 10) : env.MINIO_PORT;
     
-    console.log("Initializing MinIO client with config:", {
+    console.log("Initializing MinIO client (internal) with config:", {
       endPoint: env.MINIO_ENDPOINT,
       port: port,
       useSSL: useSSL,
@@ -25,7 +26,7 @@ function getMinioClient(): Client {
     });
 
     minioClient = new Client({
-      endPoint: env.MINIO_ENDPOINT,
+      endPoint: env.MINIO_ENDPOINT, // Use internal Docker hostname for internal operations
       port: port,
       useSSL: useSSL,
       accessKey: env.MINIO_ACCESS_KEY,
@@ -33,6 +34,37 @@ function getMinioClient(): Client {
     });
   }
   return minioClient;
+}
+
+function getMinioPresignedClient(): Client {
+  if (!minioPresignedClient) {
+    // Force SSL to false for local development
+    const useSSL = false;
+    
+    // Ensure port is a number
+    const port = typeof env.MINIO_PORT === 'string' ? parseInt(env.MINIO_PORT, 10) : env.MINIO_PORT;
+    
+    // Use different endpoints for development vs production
+    // In development: use 127.0.0.1 (browser access)
+    // In production: use the same endpoint as internal client (minio)
+    const endPoint = process.env.NODE_ENV === 'production' ? env.MINIO_ENDPOINT : '127.0.0.1';
+    
+    console.log("Initializing MinIO client (presigned) with config:", {
+      endPoint: endPoint, // Use environment-appropriate endpoint
+      port: port,
+      useSSL: useSSL,
+      accessKey: env.MINIO_ACCESS_KEY,
+    });
+
+    minioPresignedClient = new Client({
+      endPoint: endPoint, // Use environment-appropriate endpoint
+      port: port,
+      useSSL: useSSL,
+      accessKey: env.MINIO_ACCESS_KEY,
+      secretKey: env.MINIO_SECRET_KEY,
+    });
+  }
+  return minioPresignedClient;
 }
 
 // Ensure bucket exists with retry logic
@@ -99,7 +131,7 @@ export const fileUploadRouter = createTRPCRouter({
         const uniqueFileName = `${timestamp}-${input.fileName}`;
         
         // Generate presigned URL for upload
-        const uploadUrl = await getMinioClient().presignedPutObject(
+        const uploadUrl = await getMinioPresignedClient().presignedPutObject(
           env.MINIO_BUCKET_NAME,
           uniqueFileName,
           24 * 60 * 60 // 24 hours expiry
@@ -126,7 +158,7 @@ export const fileUploadRouter = createTRPCRouter({
     }))
     .mutation(async ({ input }) => {
       try {
-        const downloadUrl = await getMinioClient().presignedGetObject(
+        const downloadUrl = await getMinioPresignedClient().presignedGetObject(
           env.MINIO_BUCKET_NAME,
           input.fileName,
           24 * 60 * 60 // 24 hours expiry
@@ -230,6 +262,8 @@ export const fileUploadRouter = createTRPCRouter({
     }))
     .mutation(async ({ input }) => {
       try {
+        console.log(`Starting PDF text extraction for file: ${input.fileName}`);
+        
         // Get the file from MinIO
         const fileStream = await getMinioClient().getObject(env.MINIO_BUCKET_NAME, input.fileName);
         
@@ -243,21 +277,35 @@ export const fileUploadRouter = createTRPCRouter({
           fileStream.on('end', async () => {
             try {
               const buffer = Buffer.concat(chunks);
+              console.log(`File downloaded, buffer size: ${buffer.length} bytes`);
               
               // Extract text using the Anthropic service
               const text = await extractTextFromPDF(buffer);
               
+              if (!text || text.trim().length === 0) {
+                console.log('PDF text extraction returned empty result');
+                resolve({
+                  success: false,
+                  text: '',
+                  message: "No readable text found in PDF. The file might be corrupted, password-protected, or contain only images.",
+                });
+                return;
+              }
+              
+              console.log(`PDF text extraction successful, extracted ${text.length} characters`);
               resolve({
                 success: true,
                 text,
                 message: "PDF text extracted successfully",
               });
             } catch (error) {
+              console.error('Error in PDF text extraction:', error);
               reject(new Error(`Failed to extract PDF text: ${error instanceof Error ? error.message : 'Unknown error'}`));
             }
           });
           
           fileStream.on('error', (error) => {
+            console.error('Error reading file from MinIO:', error);
             reject(new Error(`Failed to read file: ${error.message}`));
           });
         });

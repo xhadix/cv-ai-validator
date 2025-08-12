@@ -28,16 +28,11 @@ export function ValidationResults({ cvId, fileName, pdfText, onBack, onNewValida
   });
 
   useEffect(() => {
-    // Only start validation if we have PDF text
-    if (pdfText && pdfText.trim()) {
-      validateCV.mutate({
-        cvId,
-        pdfText,
-      });
-    } else {
-      setError("PDF text is required for validation. Please try uploading the file again.");
-      setIsValidating(false);
-    }
+    // Always attempt validation - the backend will handle empty PDF text appropriately
+    validateCV.mutate({
+      cvId,
+      pdfText: pdfText || "", // Pass empty string if no PDF text
+    });
   }, [cvId, pdfText]);
 
   const getFieldDisplayName = (field: string): string => {
