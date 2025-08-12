@@ -5,21 +5,29 @@ import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { env } from "~/env";
 import { extractTextFromPDF } from "~/server/services/anthropic";
 
-// Initialize MinIO client
-const minioClient = new Client({
-  endPoint: env.MINIO_ENDPOINT,
-  port: env.MINIO_PORT,
-  useSSL: false, // Force HTTP for local development
-  accessKey: env.MINIO_ACCESS_KEY,
-  secretKey: env.MINIO_SECRET_KEY,
-});
+// Lazy MinIO client initialization
+let minioClient: Client | null = null;
+
+function getMinioClient(): Client {
+  if (!minioClient) {
+    minioClient = new Client({
+      endPoint: env.MINIO_ENDPOINT,
+      port: env.MINIO_PORT,
+      useSSL: false, // Force HTTP for local development
+      accessKey: env.MINIO_ACCESS_KEY,
+      secretKey: env.MINIO_SECRET_KEY,
+    });
+  }
+  return minioClient;
+}
 
 // Ensure bucket exists
 async function ensureBucketExists() {
   try {
-    const exists = await minioClient.bucketExists(env.MINIO_BUCKET_NAME);
+    const client = getMinioClient();
+    const exists = await client.bucketExists(env.MINIO_BUCKET_NAME);
     if (!exists) {
-      await minioClient.makeBucket(env.MINIO_BUCKET_NAME);
+      await client.makeBucket(env.MINIO_BUCKET_NAME);
       console.log(`Bucket '${env.MINIO_BUCKET_NAME}' created successfully`);
     }
   } catch (error) {
@@ -27,9 +35,6 @@ async function ensureBucketExists() {
     throw new Error("Failed to initialize file storage");
   }
 }
-
-// Initialize bucket on startup
-ensureBucketExists().catch(console.error);
 
 export const fileUploadRouter = createTRPCRouter({
   // Get presigned URL for file upload
@@ -48,7 +53,7 @@ export const fileUploadRouter = createTRPCRouter({
         const uniqueFileName = `${timestamp}-${input.fileName}`;
         
         // Generate presigned URL for upload
-        const uploadUrl = await minioClient.presignedPutObject(
+        const uploadUrl = await getMinioClient().presignedPutObject(
           env.MINIO_BUCKET_NAME,
           uniqueFileName,
           24 * 60 * 60 // 24 hours expiry
@@ -73,7 +78,7 @@ export const fileUploadRouter = createTRPCRouter({
     }))
     .mutation(async ({ input }) => {
       try {
-        const downloadUrl = await minioClient.presignedGetObject(
+        const downloadUrl = await getMinioClient().presignedGetObject(
           env.MINIO_BUCKET_NAME,
           input.fileName,
           24 * 60 * 60 // 24 hours expiry
@@ -97,7 +102,7 @@ export const fileUploadRouter = createTRPCRouter({
     }))
     .mutation(async ({ input }) => {
       try {
-        await minioClient.removeObject(env.MINIO_BUCKET_NAME, input.fileName);
+        await getMinioClient().removeObject(env.MINIO_BUCKET_NAME, input.fileName);
 
         return {
           success: true,
@@ -123,7 +128,7 @@ export const fileUploadRouter = createTRPCRouter({
           lastModified: Date;
         }> = [];
 
-        const stream = minioClient.listObjects(
+        const stream = getMinioClient().listObjects(
           env.MINIO_BUCKET_NAME,
           input.prefix,
           true
@@ -163,7 +168,7 @@ export const fileUploadRouter = createTRPCRouter({
     }))
     .query(async ({ input }) => {
       try {
-        await minioClient.statObject(env.MINIO_BUCKET_NAME, input.fileName);
+        await getMinioClient().statObject(env.MINIO_BUCKET_NAME, input.fileName);
         return { exists: true };
       } catch (error) {
         return { exists: false };
@@ -178,7 +183,7 @@ export const fileUploadRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       try {
         // Get the file from MinIO
-        const fileStream = await minioClient.getObject(env.MINIO_BUCKET_NAME, input.fileName);
+        const fileStream = await getMinioClient().getObject(env.MINIO_BUCKET_NAME, input.fileName);
         
         // Convert stream to buffer
         const chunks: Buffer[] = [];
