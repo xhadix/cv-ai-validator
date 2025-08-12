@@ -5,14 +5,14 @@ A full-stack application for validating CV information against uploaded PDF docu
 ## 🚀 Features
 
 - **CV Data Entry**: Form-based CV information collection with validation
-- **PDF Upload**: Secure file upload with drag-and-drop support and progress tracking
+- **PDF Upload**: **Secure backend API proxy** with drag-and-drop support and progress tracking
 - **Real AI Validation**: **Anthropic Claude integration** for intelligent CV comparison
 - **PDF Text Extraction**: Automatic text extraction from uploaded PDFs
 - **Validation History**: Complete audit trail of all validation attempts
 - **Responsive UI**: Modern interface with Tailwind CSS
 - **Type Safety**: Full TypeScript support with tRPC
-- **File Storage**: MinIO S3-compatible object storage
-- **Production Ready**: Docker deployment with health checks
+- **File Storage**: MinIO S3-compatible object storage with secure access
+- **Production Ready**: Docker deployment with health checks and security
 
 ## 🏗️ Architecture
 
@@ -33,10 +33,23 @@ A full-stack application for validating CV information against uploaded PDF docu
 │   (MinIO)       │    │   (Anthropic)   │    │   Engine        │
 │                 │    │                 │    │                 │
 │ • PDF Storage   │    │ • Text Analysis │    │ • Field Compare │
-│ • Presigned URLs│    │ • Content Match │    │ • Mismatch      │
-│ • File Management│   │ • Claude API    │    │   Detection     │
+│ • Backend API   │    │ • Content Match │    │ • Mismatch      │
+│ • Secure Access │    │ • Claude API    │    │   Detection     │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
+
+### 🔒 Security Architecture
+
+The application uses a **backend API proxy** approach for secure file handling:
+
+```
+Frontend → Backend API → MinIO (Docker network)
+```
+
+- **No Direct MinIO Access**: Frontend never directly accesses MinIO
+- **Backend Validation**: All files validated server-side before storage
+- **Docker Networking**: Internal communication uses service names
+- **Environment Aware**: Automatic dev/prod configuration
 
 ## 🛠️ Tech Stack
 
@@ -157,10 +170,26 @@ The application uses **real AI validation** with Anthropic's Claude API:
 - `POST /api/trpc/cv.validate` - **Validate CV against PDF using AI**
 - `GET /api/trpc/cv.getValidationHistory` - Get validation history
 
+### File Upload Architecture
+
+The application uses a **secure backend API proxy** approach:
+
+1. **Frontend** sends file via `FormData` to `/api/upload`
+2. **Backend** validates file type, size, and content
+3. **Backend** uploads to MinIO using Docker service name
+4. **Backend** returns success response with filename
+5. **Frontend** can download via `/api/download/[fileName]`
+
 ### File Upload Endpoints
 
-- `POST /api/trpc/fileUpload.getUploadUrl` - Get presigned upload URL
-- `GET /api/trpc/fileUpload.getDownloadUrl` - Get presigned download URL
+#### Backend API Proxy (Recommended)
+- `POST /api/upload` - **Secure file upload through backend**
+- `GET /api/download/[fileName]` - **Secure file download through backend**
+- `GET /api/upload` - Health check endpoint
+
+#### tRPC Endpoints
+- `POST /api/trpc/fileUpload.uploadFile` - Upload file via tRPC (base64)
+- `POST /api/trpc/fileUpload.downloadFile` - Download file via tRPC (base64)
 - `POST /api/trpc/fileUpload.extractPdfText` - **Extract text from PDF**
 - `DELETE /api/trpc/fileUpload.deleteFile` - Delete file
 - `GET /api/trpc/fileUpload.listFiles` - List files
@@ -193,7 +222,7 @@ The application uses **real AI validation** with Anthropic's Claude API:
 
 ### Docker Deployment
 
-The application includes a complete Docker setup for production with **fixed Prisma integration** and **environment-aware MinIO configuration**:
+The application includes a complete Docker setup for production with **backend API proxy architecture** and **environment-aware configuration**:
 
 ```bash
 # Build and start all services (uses .env.production automatically)
@@ -209,56 +238,13 @@ docker compose logs -f
 docker compose down
 ```
 
+### Architecture Benefits
 
-### Logs and Debugging
-
-```bash
-# View application logs
-docker compose logs app
-
-# View database logs
-docker compose logs postgres
-
-# View MinIO logs
-docker compose logs minio
-
-# Check application health
-curl http://localhost:3000/api/health
-
-# Debug file upload issues
-./debug-upload.sh
-
-# Test file upload functionality
-./test-upload.sh
-```
-
-### File Upload Troubleshooting
-
-If you encounter file upload issues:
-
-1. **Run the debug script:**
-   ```bash
-   ./debug-upload.sh
-   ```
-
-2. **Test upload functionality:**
-   ```bash
-   ./test-upload.sh
-   ```
-
-3. **Common issues:**
-   - MinIO connection problems (check networking)
-   - Bucket creation failures (check MinIO logs)
-   - File size limits (configured for 10MB max)
-   - SSL/TLS issues (set `MINIO_USE_SSL=false` for development)
-   - Environment configuration (ensure correct `.env` files are used)
-
-4. **Check container status:**
-   ```bash
-   docker ps
-   docker logs cv-validator-minio-prod
-   docker logs cv-validator-app
-   ```
+- **🔒 Security**: Backend API proxy prevents direct MinIO access
+- **🛡️ Control**: Server-side file validation and processing
+- **🔧 Simplicity**: No complex URL transformations needed
+- **📊 Monitoring**: Full visibility into upload activities
+- **🌍 Environment Aware**: Automatic dev/prod configuration
 
 ## 📁 Project Structure
 
@@ -269,12 +255,22 @@ cv-ai-validator/
 │   │   ├── _components/        # React components
 │   │   │   ├── cv-validator.tsx
 │   │   │   ├── cv-form.tsx
-│   │   │   ├── file-upload.tsx
+│   │   │   ├── file-upload.tsx          # Legacy presigned URLs
+│   │   │   ├── file-upload-backend.tsx  # New backend API proxy
 │   │   │   └── validation-results.tsx
 │   │   ├── api/                # API routes
+│   │   │   ├── upload/         # Backend file upload API
+│   │   │   │   └── route.ts
+│   │   │   ├── download/       # Backend file download API
+│   │   │   │   └── [fileName]/
+│   │   │   │       └── route.ts
+│   │   │   └── trpc/           # tRPC API
 │   │   └── page.tsx
 │   ├── server/
 │   │   ├── api/                # tRPC routers
+│   │   │   └── routers/
+│   │   │       ├── cv.ts
+│   │   │       └── fileUpload.ts
 │   │   ├── services/           # AI services
 │   │   │   └── anthropic.ts    # Claude integration
 │   │   └── db.ts
