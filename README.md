@@ -33,10 +33,10 @@ pnpm install
 ### 2. Start Development Environment
 
 ```bash
-# Start PostgreSQL and MinIO
+# Start MinIO for file storage
 docker-compose -f docker-compose.dev.yml up -d
 
-# Run database migrations
+# Run database migrations (uses T3 Stack's database setup)
 pnpm db:push
 
 # Start development server
@@ -47,7 +47,7 @@ pnpm dev
 
 - **Application**: http://localhost:3000
 - **MinIO Console**: http://localhost:9001 (admin/minioadmin)
-- **Database**: localhost:5432
+- **Database**: Uses T3 Stack's database configuration
 
 ## Development
 
