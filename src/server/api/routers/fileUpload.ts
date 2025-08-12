@@ -8,7 +8,7 @@ import { env } from "~/env";
 const minioClient = new Client({
   endPoint: env.MINIO_ENDPOINT,
   port: env.MINIO_PORT,
-  useSSL: env.MINIO_USE_SSL,
+  useSSL: false, // Force HTTP for local development
   accessKey: env.MINIO_ACCESS_KEY,
   secretKey: env.MINIO_SECRET_KEY,
 });
