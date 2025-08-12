@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
+import { validateCVWithClaude } from "~/server/services/anthropic";
 
 // Input validation schemas
 const cvInputSchema = z.object({
@@ -84,7 +85,7 @@ export const cvRouter = createTRPCRouter({
     return cvs;
   }),
 
-  // Validate CV (mock implementation for now)
+  // Validate CV using Anthropic Claude
   validate: publicProcedure
     .input(z.object({
       cvId: z.string(),
@@ -101,23 +102,35 @@ export const cvRouter = createTRPCRouter({
           throw new Error("CV not found");
         }
 
-        // Mock validation logic (will be replaced with real AI later)
-        const mockValidation = await performMockValidation(cv, input.pdfText);
+        if (!input.pdfText || !input.pdfText.trim()) {
+          throw new Error("PDF text is required for validation");
+        }
 
-        // Save validation result
+        // Use Anthropic Claude for AI validation
+        const aiValidation = await validateCVWithClaude(
+          {
+            fullName: cv.fullName,
+            email: cv.email,
+            phone: cv.phone,
+            skills: cv.skills,
+            experience: cv.experience,
+          },
+          input.pdfText
+        );
+        
         const validationResult = await ctx.db.validationResult.create({
           data: {
             cvId: input.cvId,
-            isValid: mockValidation.isValid,
-            mismatches: mockValidation.mismatches,
-            message: mockValidation.message,
+            isValid: aiValidation.isValid,
+            mismatches: aiValidation.mismatches,
+            message: aiValidation.message,
           },
         });
 
         return {
           success: true,
           validationResult,
-          message: mockValidation.message,
+          message: validationResult.message,
         };
       } catch (error) {
         if (error instanceof Error) {
@@ -140,54 +153,4 @@ export const cvRouter = createTRPCRouter({
     }),
 });
 
-// Mock validation function (will be replaced with real AI)
-async function performMockValidation(cv: any, pdfText?: string) {
-  // Simulate processing time
-  await new Promise(resolve => setTimeout(resolve, 1000));
 
-  // Mock validation logic
-  const mismatches: string[] = [];
-  
-  // Simulate some validation checks
-  if (pdfText) {
-    // Check if name appears in PDF
-    if (!pdfText.toLowerCase().includes(cv.fullName.toLowerCase())) {
-      mismatches.push("fullName");
-    }
-    
-    // Check if email appears in PDF
-    if (!pdfText.toLowerCase().includes(cv.email.toLowerCase())) {
-      mismatches.push("email");
-    }
-    
-    // Check if skills are mentioned
-    const skills = cv.skills.toLowerCase().split(',').map((s: string) => s.trim());
-    const missingSkills = skills.filter((skill: string) => !pdfText.toLowerCase().includes(skill));
-    if (missingSkills.length > 0) {
-      mismatches.push("skills");
-    }
-  } else {
-    // If no PDF text, simulate random validation
-    const random = Math.random();
-    if (random < 0.3) {
-      mismatches.push("fullName");
-    }
-    if (random < 0.2) {
-      mismatches.push("email");
-    }
-    if (random < 0.4) {
-      mismatches.push("skills");
-    }
-  }
-
-  const isValid = mismatches.length === 0;
-  const message = isValid 
-    ? "All fields match the PDF content" 
-    : `Validation failed. Mismatches found in: ${mismatches.join(', ')}`;
-
-  return {
-    isValid,
-    mismatches,
-    message,
-  };
-}

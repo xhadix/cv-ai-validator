@@ -12,6 +12,7 @@ export function CVValidator() {
   const [currentStep, setCurrentStep] = useState<"form" | "upload" | "results">("form");
   const [submittedCV, setSubmittedCV] = useState<any>(null);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const [extractedPdfText, setExtractedPdfText] = useState<string>("");
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -67,8 +68,9 @@ export function CVValidator() {
         {currentStep === "upload" && submittedCV && (
           <FileUpload 
             cvId={submittedCV.id}
-            onSuccess={(fileName) => {
+            onSuccess={(fileName, pdfText) => {
               setUploadedFile(fileName);
+              setExtractedPdfText(pdfText);
               setCurrentStep("results");
             }}
             onBack={() => setCurrentStep("form")}
@@ -79,6 +81,7 @@ export function CVValidator() {
           <ValidationResults 
             cvId={submittedCV.id}
             fileName={uploadedFile}
+            pdfText={extractedPdfText}
             onBack={() => setCurrentStep("upload")}
             onNewValidation={() => setCurrentStep("form")}
           />

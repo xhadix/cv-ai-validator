@@ -6,11 +6,12 @@ import { api } from "~/trpc/react";
 interface ValidationResultsProps {
   cvId: string;
   fileName: string;
+  pdfText: string;
   onBack: () => void;
   onNewValidation: () => void;
 }
 
-export function ValidationResults({ cvId, fileName, onBack, onNewValidation }: ValidationResultsProps) {
+export function ValidationResults({ cvId, fileName, pdfText, onBack, onNewValidation }: ValidationResultsProps) {
   const [isValidating, setIsValidating] = useState(true);
   const [validationResult, setValidationResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,9 +31,9 @@ export function ValidationResults({ cvId, fileName, onBack, onNewValidation }: V
     // Start validation when component mounts
     validateCV.mutate({
       cvId,
-      pdfText: "", // Mock validation for now
+      pdfText,
     });
-  }, [cvId]);
+  }, [cvId, pdfText]);
 
   const getFieldDisplayName = (field: string): string => {
     const fieldMap: Record<string, string> = {
@@ -72,7 +73,7 @@ export function ValidationResults({ cvId, fileName, onBack, onNewValidation }: V
             onClick={() => {
               setIsValidating(true);
               setError(null);
-              validateCV.mutate({ cvId, pdfText: "" });
+              validateCV.mutate({ cvId, pdfText });
             }}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
           >
@@ -173,11 +174,11 @@ export function ValidationResults({ cvId, fileName, onBack, onNewValidation }: V
           
           <div className="space-x-4">
             <button
-              onClick={() => {
-                setIsValidating(true);
-                setError(null);
-                validateCV.mutate({ cvId, pdfText: "" });
-              }}
+                          onClick={() => {
+              setIsValidating(true);
+              setError(null);
+              validateCV.mutate({ cvId, pdfText });
+            }}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
             >
               Re-validate

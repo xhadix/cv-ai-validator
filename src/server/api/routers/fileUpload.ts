@@ -3,6 +3,7 @@ import { Client } from "minio";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { env } from "~/env";
+import { extractTextFromPDF } from "~/server/services/anthropic";
 
 // Initialize MinIO client
 const minioClient = new Client({
@@ -166,6 +167,50 @@ export const fileUploadRouter = createTRPCRouter({
         return { exists: true };
       } catch (error) {
         return { exists: false };
+      }
+    }),
+
+  // Extract text from PDF file
+  extractPdfText: publicProcedure
+    .input(z.object({
+      fileName: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        // Get the file from MinIO
+        const fileStream = await minioClient.getObject(env.MINIO_BUCKET_NAME, input.fileName);
+        
+        // Convert stream to buffer
+        const chunks: Buffer[] = [];
+        return new Promise((resolve, reject) => {
+          fileStream.on('data', (chunk) => {
+            chunks.push(chunk);
+          });
+          
+          fileStream.on('end', async () => {
+            try {
+              const buffer = Buffer.concat(chunks);
+              
+              // Extract text using the Anthropic service
+              const text = await extractTextFromPDF(buffer);
+              
+              resolve({
+                success: true,
+                text,
+                message: "PDF text extracted successfully",
+              });
+            } catch (error) {
+              reject(new Error(`Failed to extract PDF text: ${error instanceof Error ? error.message : 'Unknown error'}`));
+            }
+          });
+          
+          fileStream.on('error', (error) => {
+            reject(new Error(`Failed to read file: ${error.message}`));
+          });
+        });
+      } catch (error) {
+        console.error("Error extracting PDF text:", error);
+        throw new Error("Failed to extract PDF text");
       }
     }),
 });

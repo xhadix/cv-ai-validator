@@ -5,7 +5,7 @@ import { api } from "~/trpc/react";
 
 interface FileUploadProps {
   cvId: string;
-  onSuccess: (fileName: string) => void;
+  onSuccess: (fileName: string, pdfText: string) => void;
   onBack: () => void;
 }
 
@@ -16,6 +16,8 @@ export function FileUpload({ cvId, onSuccess, onBack }: FileUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getUploadUrl = api.fileUpload.getUploadUrl.useMutation();
+  const extractPdfText = api.fileUpload.extractPdfText.useMutation();
+  const [pdfText, setPdfText] = useState<string>("");
 
   const handleFileSelect = async (file: File) => {
     if (file.type !== "application/pdf") {
@@ -59,10 +61,25 @@ export function FileUpload({ cvId, onSuccess, onBack }: FileUploadProps) {
         }
       });
 
-      xhr.addEventListener("load", () => {
+      xhr.addEventListener("load", async () => {
         if (xhr.status === 200) {
           setUploadProgress(100);
-          onSuccess(uploadUrlResult.fileName);
+          
+          // Extract PDF text after successful upload
+          try {
+            const textResult = await extractPdfText.mutateAsync({
+              fileName: uploadUrlResult.fileName,
+            });
+            
+            if (textResult && typeof textResult === 'object' && 'success' in textResult && textResult.success && 'text' in textResult) {
+              setPdfText((textResult as { text: string }).text);
+            }
+          } catch (error) {
+            console.error("Failed to extract PDF text:", error);
+            // Continue anyway - validation can still work without text extraction
+          }
+          
+          onSuccess(uploadUrlResult.fileName, pdfText);
         } else {
           throw new Error(`Upload failed with status: ${xhr.status}`);
         }
@@ -100,14 +117,20 @@ export function FileUpload({ cvId, onSuccess, onBack }: FileUploadProps) {
 
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      handleFileSelect(files[0]);
+      const file = files[0];
+      if (file) {
+        handleFileSelect(file);
+      }
     }
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      handleFileSelect(files[0]);
+      const file = files[0];
+      if (file) {
+        handleFileSelect(file);
+      }
     }
   };
 

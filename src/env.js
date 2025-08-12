@@ -17,6 +17,7 @@ export const env = createEnv({
     MINIO_SECRET_KEY: z.string().default("minioadmin"),
     MINIO_BUCKET_NAME: z.string().default("cv-uploads"),
     MINIO_USE_SSL: z.coerce.boolean().default(false),
+    ANTHROPIC_API_KEY: z.string().optional(),
   },
 
   /**
@@ -41,6 +42,7 @@ export const env = createEnv({
     MINIO_SECRET_KEY: process.env.MINIO_SECRET_KEY,
     MINIO_BUCKET_NAME: process.env.MINIO_BUCKET_NAME,
     MINIO_USE_SSL: process.env.MINIO_USE_SSL,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**
