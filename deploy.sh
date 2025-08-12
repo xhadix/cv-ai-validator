@@ -48,12 +48,12 @@ echo "✅ All services are healthy!"
 
 # Run database migrations
 echo "🗄️ Running database migrations..."
-docker compose exec app npx prisma migrate deploy
+docker compose exec app pnpm prisma migrate deploy
 
 # Seed database if needed
 if [ "$SEED_DATABASE" = "true" ]; then
     echo "🌱 Seeding database..."
-    docker compose exec app npm run db:seed
+    docker compose exec app pnpm run db:seed
 fi
 
 echo "🎉 Deployment completed successfully!"
