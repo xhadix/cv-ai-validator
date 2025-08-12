@@ -13,7 +13,7 @@ datasource db {
 model CV {
     id          String   @id @default(cuid())
     fullName    String
-    email       String   @unique
+    email       String
     phone       String
     skills      String
     experience  String

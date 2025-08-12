@@ -42,10 +42,24 @@ export const cvRouter = createTRPCRouter({
           message: "CV submitted successfully",
         };
       } catch (error) {
+        // Handle database errors
         if (error instanceof Error) {
+          // Handle database connection errors
+          if (error.message.includes('Database') || error.message.includes('Connection')) {
+            throw new Error("Database connection error. Please try again in a moment.");
+          }
+          
+          // Handle validation errors
+          if (error.message.includes('Invalid') || error.message.includes('validation')) {
+            throw new Error("Invalid data provided. Please check your input and try again.");
+          }
+          
+          // Generic error with more context
           throw new Error(`Failed to submit CV: ${error.message}`);
         }
-        throw new Error("Failed to submit CV");
+        
+        // Fallback for unknown errors
+        throw new Error("Failed to submit CV. Please try again.");
       }
     }),
 
