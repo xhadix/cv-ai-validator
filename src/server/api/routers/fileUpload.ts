@@ -104,7 +104,7 @@ async function initializeBucket() {
 }
 
 export const fileUploadRouter = createTRPCRouter({
-  // Get presigned URL for file upload
+  // Get presigned URL for file upload (legacy - direct to MinIO)
   getUploadUrl: publicProcedure
     .input(z.object({
       fileName: z.string(),
@@ -148,7 +148,50 @@ export const fileUploadRouter = createTRPCRouter({
       }
     }),
 
-  // Get file download URL
+  // Upload file through backend API (recommended approach)
+  uploadFile: publicProcedure
+    .input(z.object({
+      fileName: z.string(),
+      fileType: z.string().refine(
+        (type) => type === "application/pdf",
+        "Only PDF files are allowed"
+      ),
+      fileData: z.string(), // Base64 encoded file data
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        // Ensure bucket exists
+        await initializeBucket();
+        
+        // Generate unique filename
+        const timestamp = Date.now();
+        const uniqueFileName = `${timestamp}-${input.fileName}`;
+        
+        // Decode base64 file data
+        const fileBuffer = Buffer.from(input.fileData, 'base64');
+        
+        // Upload file directly to MinIO through backend
+        await getMinioClient().putObject(
+          env.MINIO_BUCKET_NAME,
+          uniqueFileName,
+          fileBuffer
+        );
+
+        console.log(`Uploaded file through backend API: ${uniqueFileName}`);
+
+        return {
+          success: true,
+          fileName: uniqueFileName,
+          fileSize: fileBuffer.length,
+          message: "File uploaded successfully through backend API",
+        };
+      } catch (error) {
+        console.error("Error uploading file through backend:", error);
+        throw new Error(`Failed to upload file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }),
+
+  // Get file download URL (legacy - direct to MinIO)
   getDownloadUrl: publicProcedure
     .input(z.object({
       fileName: z.string(),
@@ -174,6 +217,44 @@ export const fileUploadRouter = createTRPCRouter({
       } catch (error) {
         console.error("Error generating download URL:", error);
         throw new Error("Failed to generate download URL");
+      }
+    }),
+
+  // Download file through backend API (recommended approach)
+  downloadFile: publicProcedure
+    .input(z.object({
+      fileName: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        // Get file from MinIO through backend
+        const fileStream = await getMinioClient().getObject(
+          env.MINIO_BUCKET_NAME,
+          input.fileName
+        );
+
+        // Convert stream to buffer
+        const chunks: Buffer[] = [];
+        for await (const chunk of fileStream) {
+          chunks.push(chunk);
+        }
+        const fileBuffer = Buffer.concat(chunks);
+
+        // Convert to base64 for API response
+        const fileData = fileBuffer.toString('base64');
+
+        console.log(`Downloaded file through backend API: ${input.fileName}`);
+
+        return {
+          success: true,
+          fileName: input.fileName,
+          fileData: fileData,
+          fileSize: fileBuffer.length,
+          message: "File downloaded successfully through backend API",
+        };
+      } catch (error) {
+        console.error("Error downloading file through backend:", error);
+        throw new Error(`Failed to download file: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }),
 

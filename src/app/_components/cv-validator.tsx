@@ -4,7 +4,7 @@ import { useState } from "react";
 import { api } from "~/trpc/react";
 
 import { CVForm } from "./cv-form";
-import { FileUpload } from "./file-upload";
+import { FileUploadBackend } from "./file-upload-backend";
 import { ValidationResults } from "./validation-results";
 import { CVList } from "./cv-list";
 
@@ -66,9 +66,9 @@ export function CVValidator() {
         )}
 
         {currentStep === "upload" && submittedCV && (
-          <FileUpload 
+          <FileUploadBackend 
             cvId={submittedCV.id}
-            onSuccess={(fileName, pdfText) => {
+            onSuccess={(fileName: string, pdfText: string) => {
               setUploadedFile(fileName);
               setExtractedPdfText(pdfText);
               setCurrentStep("results");
